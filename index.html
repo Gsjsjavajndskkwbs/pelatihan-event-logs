@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pelatihan & Event Logs</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 800px; margin: auto; padding: 1rem; }
+  h1, h2 { text-align: center; }
+  input, select, textarea, button { width: 100%; margin: 0.3rem 0 1rem 0; padding: 0.5rem; }
+  button { cursor: pointer; background-color: #4CAF50; color: white; border: none; }
+  button:hover { background-color: #45a049; }
+  .hidden { display: none; }
+  .log-entry { border: 1px solid #ccc; padding: 0.5rem; margin-bottom: 0.5rem; border-radius: 5px; background: #f9f9f9; }
+  nav { text-align: right; margin-bottom: 1rem; }
+  nav button { width: auto; padding: 0.3rem 0.8rem; background: #f44336; }
+  video { max-width: 100%; border-radius: 5px; }
+  canvas { display: none; }
+</style>
+</head>
+<body>
+
+<h1>Pelatihan & Event Logs</h1>
+
+<div id="login-section">
+  <h2>Login</h2>
+  <input type="email" id="email" placeholder="Email" required />
+  <input type="password" id="password" placeholder="Password" required />
+  <label>Selesaikan: <span id="captcha-question"></span></label>
+  <input type="text" id="captcha-answer" placeholder="Jawaban captcha" required />
+  <button id="login-btn">Login</button>
+  <p id="login-error" style="color:red;"></p>
+</div>
+
+<div id="app-section" class="hidden">
+
+<nav>
+  <button id="logout-btn">Logout</button>
+</nav>
+
+<h2>Tambah Pelatihan</h2>
+<form id="pelatihan-form">
+  <input type="text" id="host" placeholder="Host (wajib)" required />
+  <input type="text" id="cohost" placeholder="Co Host (opsional)" />
+  <input type="text" id="siswa" placeholder="Siswa (wajib)" required />
+  <input type="text" id="jenis-pelatihan" placeholder="Jenis Pelatihan (wajib)" required />
+  <input type="text" id="pangkat-awal" placeholder="Pangkat Awal" />
+  <input type="text" id="pangkat-baru" placeholder="Pangkat Baru" />
+  <button type="submit">Tambah Pelatihan</button>
+</form>
+
+<h2>Tambah Event</h2>
+<form id="event-form">
+  <input type="text" id="host-event" placeholder="Host (wajib)" required />
+  <input type="text" id="cohost-event" placeholder="Co Host (opsional)" />
+  <input type="text" id="yang-hadir" placeholder="Yang Hadir (wajib)" required />
+  <input type="text" id="jenis-event" placeholder="Jenis Event (wajib)" required />
+  <button type="submit">Tambah Event</button>
+</form>
+
+<h2>Webcam Capture</h2>
+<video id="video" autoplay playsinline></video>
+<button id="capture-btn">Capture Webcam</button>
+<canvas id="canvas"></canvas>
+<img id="snapshot" alt="Snapshot akan tampil disini" style="max-width:100%; margin-top:1rem;" />
+
+<h2>Log Pelatihan</h2>
+<div id="pelatihan-logs"></div>
+
+<h2>Log Event</h2>
+<div id="event-logs"></div>
+
+</div>
+
+<script>
+(() => {
+  // Users whitelist
+  const USERS = {
+    "kpnria61@gmail.com": { password: "adminkpnri20001", role: "admin" },
+    "pelatihankpnri@gmail.com": { password: "PelatihKPNRI235", role: "pelatih" },
+  };
+
+  // Captcha question
+  let captchaQ, captchaA;
+  function generateCaptcha() {
+    captchaQ = "5 + 3 = ?";
+    captchaA = "8";
+    document.getElementById("captcha-question").textContent = captchaQ;
+  }
+
+  generateCaptcha();
+
+  // Login handler
+  const loginBtn = document.getElementById("login-btn");
+  const loginError = document.getElementById("login-error");
+  loginBtn.onclick = () => {
+    const email = document.getElementById("email").value.trim().toLowerCase();
+    const password = document.getElementById("password").value;
+    const answer = document.getElementById("captcha-answer").value.trim();
+
+    if (!USERS[email]) {
+      loginError.textContent = "Email tidak terdaftar.";
+      return;
+    }
+    if (USERS[email].password !== password) {
+      loginError.textContent = "Password salah.";
+      return;
+    }
+    if (answer !== captchaA) {
+      loginError.textContent = "Captcha salah.";
+      generateCaptcha();
+      return;
+    }
+
+    // Sukses login
+    loginError.textContent = "";
+    sessionStorage.setItem("userEmail", email);
+    sessionStorage.setItem("userRole", USERS[email].role);
+    showApp();
+  };
+
+  // Logout handler
+  document.getElementById("logout-btn").onclick = () => {
+    sessionStorage.clear();
+    location.reload();
+  };
+
+  // Show app after login
+  function showApp() {
+    document.getElementById("login-section").classList.add("hidden");
+    document.getElementById("app-section").classList.remove("hidden");
+    loadLogs();
+    startWebcam();
+  }
+
+  // Check if user already logged in
+  if (sessionStorage.getItem("userEmail")) {
+    showApp();
+  }
+
+  // Save & load logs from LocalStorage
+  function saveLogs() {
+    localStorage.setItem("pelatihanLogs", JSON.stringify(pelatihanLogs));
+    localStorage.setItem("eventLogs", JSON.stringify(eventLogs));
+  }
+
+  function loadLogs() {
+    pelatihanLogs = JSON.parse(localStorage.getItem("pelatihanLogs")) || [];
+    eventLogs = JSON.parse(localStorage.getItem("eventLogs")) || [];
+    renderLogs();
+  }
+
+  // Logs arrays
+  let pelatihanLogs = [];
+  let eventLogs = [];
+
+  // Render logs to DOM
+  function renderLogs() {
+    const pelDiv = document.getElementById("pelatihan-logs");
+    pelDiv.innerHTML = "";
+    if (pelatihanLogs.length === 0) pelDiv.innerHTML = "<p>Tidak ada log pelatihan.</p>";
+    pelatihanLogs.forEach(log => {
+      pelDiv.innerHTML += `
+        <div class="log-entry">
+          <b>${log.timestamp}</b><br>
+          Host: ${log.host}<br>
+          Co Host: ${log.cohost}<br>
+          Siswa: ${log.siswa}<br>
+          Jenis Pelatihan: ${log.jenis}<br>
+          Pangkat Awal: ${log.pangkat_awal} → ${log.pangkat_baru}<br>
+          IP: ${log.ip}<br>
+          Device: ${log.device}<br>
+          Webcam Snapshot: ${log.webcam ? '<img src="'+log.webcam+'" style="max-width:200px; border-radius:5px;" />' : 'Tidak ada'}
+        </div>`;
+    });
+
+    const evDiv = document.getElementById("event-logs");
+    evDiv.innerHTML = "";
+    if (eventLogs.length === 0) evDiv.innerHTML = "<p>Tidak ada log event.</p>";
+    eventLogs.forEach(log => {
+      evDiv.innerHTML += `
+        <div class="log-entry">
+          <b>${log.timestamp}</b><br>
+          Host: ${log.host}<br>
+          Co Host: ${log.cohost}<br>
+          Yang Hadir: ${log.yang_hadir}<br>
+          Jenis Event: ${log.jenis}<br>
+          IP: ${log.ip}<br>
+          Device: ${log.device}<br>
+          Webcam Snapshot: ${log.webcam ? '<img src="'+log.webcam+'" style="max-width:200px; border-radius:5px;" />' : 'Tidak ada'}
+        </div>`;
+    });
+  }
+
+  // Form submit handlers
+  document.getElementById("pelatihan-form").onsubmit = e => {
+    e.preventDefault();
+    addPelatihanLog();
+  };
+  document.getElementById("event-form").onsubmit = e => {
+    e.preventDefault();
+    addEventLog();
+  };
+
+  // Add Pelatihan Log
+  function addPelatihanLog() {
+    const host = document.getElementById("host").value.trim();
+    const cohost = document.getElementById("cohost").value.trim() || "-";
+    const siswa = document.getElementById("siswa").value.trim();
+   
